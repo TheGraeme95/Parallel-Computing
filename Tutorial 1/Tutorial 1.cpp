@@ -33,18 +33,15 @@ int main(int argc, char **argv) {
 		else if (strcmp(argv[i], "-h") == 0) { print_help(); }
 	}
 
-	vector<string> column1;
-	vector<int> column2;
-	vector<int> column3;
-	vector<int> column4;
-	vector<int> column5;
-	vector<float> column6;
+	vector<float> inputData;
+
 	string a;
 	int b;
 	int c;
 	int d;
 	int e;
 	float f;
+
 	ifstream infile;
 	infile.open("temp_lincolnshire_short.txt");
 	if (infile.fail())
@@ -57,16 +54,11 @@ int main(int argc, char **argv) {
 	{
 		infile >> a >> b >> c >> d >> e >> f;	
 
-		column1.push_back(a);
-		column2.push_back(b);
-		column3.push_back(c);
-		column4.push_back(d);
-		column5.push_back(e);
-		column6.push_back(f);
+		inputData.push_back(f);
 	}
 	infile.close();
 	
-	cout << column1.back() << column2[0] << column3[0] << column4[0] << column5[0] << column6[0] << endl;
+	cout << inputData[0] << endl;
 
 
 
@@ -104,30 +96,38 @@ int main(int argc, char **argv) {
 
 		//Part 4 - memory allocation
 		//host - input
-		vector<int> A = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 }; //C++11 allows this type of initialisation
-		vector<int> B = { 0, 1, 2, 0, 1, 2, 0, 1, 2, 0 };
-		
-		size_t vector_elements = A.size();//number of elements
-		size_t vector_size = A.size()*sizeof(int);//size in bytes
+		cl::Device device = context.getInfo<CL_CONTEXT_DEVICES>()[0];
+
+
+
+		size_t local_size = kernel_add.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>
+			(device)
+
+		size_t padding = inputData.size() % local_size;
+
+
+
+
+
+
+		size_t vector_elements = inputData.size();//number of elements
+		size_t vector_size = inputData.size()*sizeof(int);//size in bytes
 
 		//host - output
-		vector<int> C(vector_elements);
+		vector<int> C(1);
 
 		//device - buffers
-		cl::Buffer buffer_A(context, CL_MEM_READ_WRITE, vector_size);
-		cl::Buffer buffer_B(context, CL_MEM_READ_WRITE, vector_size);
-		cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, vector_size);
+		cl::Buffer buffer_A(context, CL_MEM_READ_WRITE, vector_size); //input buffer
+		cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, vector_size); //ouput buffer
 
 		//Part 5 - device operations
 
 		//5.1 Copy arrays A and B to device memory
-		queue.enqueueWriteBuffer(buffer_A, CL_TRUE, 0, vector_size, &A[0]);
-		queue.enqueueWriteBuffer(buffer_B, CL_TRUE, 0, vector_size, &B[0]);
+		queue.enqueueWriteBuffer(buffer_A, CL_TRUE, 0, vector_size, &inputData[0]);
 
 		//5.2 Setup and execute the kernel (i.e. device code)
-		cl::Kernel kernel_add = cl::Kernel(program, "add");
-		kernel_add.setArg(0, buffer_A);
-		kernel_add.setArg(1, buffer_B);
+		cl::Kernel kernel_add = cl::Kernel(program, "minimum");
+		kernel_add.setArg(0, buffer_A);		
 		kernel_add.setArg(2, buffer_C);
 
 		queue.enqueueNDRangeKernel(kernel_add, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
@@ -135,8 +135,8 @@ int main(int argc, char **argv) {
 		//5.3 Copy the result from device to host
 		queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, vector_size, &C[0]);
 
-		cout << "A = " << A << endl;
-		cout << "B = " << B << endl;
+		
+		
 		cout << "C = " << C << endl;
 	}
 	catch (cl::Error err) {
