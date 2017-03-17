@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
 	int platform_id = 0;
 	int device_id = 0;
 
-	for (int i = 1; i < argc; i++)	{
+	for (int i = 1; i < argc; i++) {
 		if ((strcmp(argv[i], "-p") == 0) && (i < (argc - 1))) { platform_id = atoi(argv[++i]); }
 		else if ((strcmp(argv[i], "-d") == 0) && (i < (argc - 1))) { device_id = atoi(argv[++i]); }
 		else if (strcmp(argv[i], "-l") == 0) { cout << ListPlatformsDevices() << endl; }
@@ -52,18 +52,13 @@ int main(int argc, char **argv) {
 
 	while (!infile.eof())
 	{
-		infile >> a >> b >> c >> d >> e >> f;	
+		infile >> a >> b >> c >> d >> e >> f;
 
 		inputData.push_back(f);
 	}
 	infile.close();
+
 	
-	cout << inputData[0] << endl;
-
-
-
-
-
 	//detect any potential exceptions
 	try {
 		//Part 2 - host operations
@@ -100,48 +95,56 @@ int main(int argc, char **argv) {
 
 
 
-		size_t local_size = kernel_add.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>
-			(device)
 
+		//queue.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>
+		//(device);
+		size_t local_size = 128;
 		size_t padding = inputData.size() % local_size;
 
+		if (padding) 
+		{
+			//create an extra vector with neutral values
+			std::vector<float> A_ext(local_size - padding, 0);
+			//append that extra vector to our input
+			inputData.insert(inputData.end(), A_ext.begin(), A_ext.end());
+		}
 
 
 
+			size_t vector_elements = inputData.size();//number of elements
+			size_t vector_size = inputData.size() * sizeof(float);//size in bytes
+
+			//host - output
+			vector<int> C(1);
+
+			//device - buffers
+			cl::Buffer buffer_A(context, CL_MEM_READ_WRITE, vector_size); //input buffer
+			cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, vector_size); //ouput buffer
+
+			//Part 5 - device operations
+
+			//5.1 Copy arrays A and B to device memory
+			queue.enqueueWriteBuffer(buffer_A, CL_TRUE, 0, vector_size, &inputData[0]);
+
+			//5.2 Setup and execute the kernel (i.e. device code)
+			cl::Kernel kernel_add = cl::Kernel(program, "reduce_add_4");
+			kernel_add.setArg(0, buffer_A);
+			kernel_add.setArg(1, buffer_C);
+			kernel_add.setArg(2, cl::Local(local_size * sizeof(float)));//local memory size
+
+			queue.enqueueNDRangeKernel(kernel_add, cl::NullRange, cl::NDRange(vector_elements), cl::NDRange(local_size));
+
+			//5.3 Copy the result from device to host
+			queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, 1, &C[0]);
 
 
-		size_t vector_elements = inputData.size();//number of elements
-		size_t vector_size = inputData.size()*sizeof(int);//size in bytes
 
-		//host - output
-		vector<int> C(1);
+			cout << C[0] << endl;
+		}
+		catch (cl::Error err)
+		{
+			cerr << "ERROR: " << err.what() << ", " << getErrorString(err.err()) << endl;
+		}
 
-		//device - buffers
-		cl::Buffer buffer_A(context, CL_MEM_READ_WRITE, vector_size); //input buffer
-		cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, vector_size); //ouput buffer
-
-		//Part 5 - device operations
-
-		//5.1 Copy arrays A and B to device memory
-		queue.enqueueWriteBuffer(buffer_A, CL_TRUE, 0, vector_size, &inputData[0]);
-
-		//5.2 Setup and execute the kernel (i.e. device code)
-		cl::Kernel kernel_add = cl::Kernel(program, "minimum");
-		kernel_add.setArg(0, buffer_A);		
-		kernel_add.setArg(2, buffer_C);
-
-		queue.enqueueNDRangeKernel(kernel_add, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
-
-		//5.3 Copy the result from device to host
-		queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, vector_size, &C[0]);
-
-		
-		
-		cout << "C = " << C << endl;
+		return 0;
 	}
-	catch (cl::Error err) {
-		cerr << "ERROR: " << err.what() << ", " << getErrorString(err.err()) << endl;
-	}
-
-	return 0;
-}
