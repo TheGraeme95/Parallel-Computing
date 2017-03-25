@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
 		}
 
 		typedef int mytype;
-
+		
 		//Part 4 - memory allocation
 		//host - input
 		std::vector<mytype> A(10, 1);//allocate 10 elements with an initial value 1 - their sum is 10 so it should be easy to check the results!

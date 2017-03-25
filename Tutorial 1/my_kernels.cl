@@ -29,7 +29,7 @@ __kernel void reduce_add_4(__global const int* A, __global int* B, __local int* 
 	}
 }
 
-__kernel void Reduction(__global const int* A, __global const int* B, __local int* localData))
+__kernel void Reduction(__global const int* A, __global const int* B, __local int* localData)
 { 
 	size_t globalID = get_global_id(0);
 	size_t localSize = get_local_size(0);
@@ -38,7 +38,7 @@ __kernel void Reduction(__global const int* A, __global const int* B, __local in
 	localData[localID] = A[globalID];
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	for (int i = localSize >> 1; i > 0; 1 >>=1)
+	for (int i = localSize >> 1; i > 0; i >>= 1)
 	{
 		if (localID < i)
 			localData[localID] += localData[localID + i];

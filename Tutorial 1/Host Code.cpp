@@ -32,15 +32,15 @@ int main(int argc, char **argv) {
 		else if (strcmp(argv[i], "-l") == 0) { cout << ListPlatformsDevices() << endl; }
 		else if (strcmp(argv[i], "-h") == 0) { print_help(); }
 	}
-
-	vector<float> inputData;
+	typedef float mytype;
+	vector<mytype> input_Data;
 
 	string a;
 	int b;
 	int c;
 	int d;
 	int e;
-	float f;
+	mytype f;
 
 	ifstream infile;
 	infile.open("temp_lincolnshire_short.txt");
@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
 	{
 		infile >> a >> b >> c >> d >> e >> f;
 
-		inputData.push_back(f);
+		input_Data.push_back(f);
 	}
 	infile.close();
 
@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
 		//2.2 Load & build the device code
 		cl::Program::Sources sources;
 
-		AddSources(sources, "my_kernels.cl");
+		AddSources(sources, "Kernels.cl");
 
 		cl::Program program(context, sources);
 
@@ -98,48 +98,67 @@ int main(int argc, char **argv) {
 
 		//queue.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>
 		//(device);
-		size_t local_size = 128;
-		size_t padding = inputData.size() % local_size;
+		
+		size_t workGroupSize = 256;
+		size_t padding = input_Data.size() % workGroupSize;
+		
 
 		if (padding) 
 		{
 			//create an extra vector with neutral values
-			std::vector<float> A_ext(local_size - padding, 0);
+			std::vector<mytype> A_ext(workGroupSize - padding, 0);
 			//append that extra vector to our input
-			inputData.insert(inputData.end(), A_ext.begin(), A_ext.end());
+			input_Data.insert(input_Data.end(), A_ext.begin(), A_ext.end());
 		}
 
 
 
-			size_t vector_elements = inputData.size();//number of elements
-			size_t vector_size = inputData.size() * sizeof(float);//size in bytes
+			//number of elements
+			size_t numInputElements = input_Data.size();
+			size_t input_size = input_Data.size() * sizeof(mytype);//size in bytes
+			size_t numWorkGroups = numInputElements / workGroupSize;
 
 			//host - output
-			vector<int> C(1);
-
+			vector<mytype> outputData(numWorkGroups);
+			size_t output_size = outputData.size() * sizeof(mytype);			
 			//device - buffers
-			cl::Buffer buffer_A(context, CL_MEM_READ_WRITE, vector_size); //input buffer
-			cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, vector_size); //ouput buffer
+			//cl::Buffer buffer_A(context, CL_MEM_READ_WRITE, vector_size); //input buffer
+			//cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, vector_size); //ouput buffer
+
+			cl::Buffer inBuffer(context, CL_MEM_READ_WRITE, input_size);
+			cl::Buffer outBuffer(context, CL_MEM_READ_WRITE, output_size);
 
 			//Part 5 - device operations
 
 			//5.1 Copy arrays A and B to device memory
-			queue.enqueueWriteBuffer(buffer_A, CL_TRUE, 0, vector_size, &inputData[0]);
+			queue.enqueueWriteBuffer(inBuffer, CL_TRUE, 0, input_size, &input_Data[0]);
+			queue.enqueueFillBuffer(outBuffer, 0, 0, output_size);//zero B buffer on device memory
+
+			cl::Kernel kernel_sum = cl::Kernel(program, "Sum");
+			kernel_sum.setArg(0, inBuffer);
+			kernel_sum.setArg(1, cl::Local(sizeof(mytype) * workGroupSize));//local memory size
+			kernel_sum.setArg(2, outBuffer);
+			
+
+
+			queue.enqueueNDRangeKernel(kernel_sum, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(workGroupSize));
+
+
 
 			//5.2 Setup and execute the kernel (i.e. device code)
-			cl::Kernel kernel_add = cl::Kernel(program, "reduce_add_4");
-			kernel_add.setArg(0, buffer_A);
-			kernel_add.setArg(1, buffer_C);
-			kernel_add.setArg(2, cl::Local(local_size * sizeof(float)));//local memory size
-
-			queue.enqueueNDRangeKernel(kernel_add, cl::NullRange, cl::NDRange(vector_elements), cl::NDRange(local_size));
-
+		/*	cl::Kernel kernel_min = cl::Kernel(program, "Minimum");
+			kernel_min.setArg(0, inBuffer);		
+			kernel_min.setArg(1, cl::Local(sizeof(mytype) * local_size));//local memory size
+			kernel_min.setArg(2, numInputElements);
+			kernel_min.setArg(3, outBuffer);
+			queue.enqueueNDRangeKernel(kernel_min, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(local_size));
+		*/
 			//5.3 Copy the result from device to host
-			queue.enqueueReadBuffer(buffer_C, CL_TRUE, 0, 1, &C[0]);
+			queue.enqueueReadBuffer(outBuffer, CL_TRUE, 0, output_size, outputData.data());
 
 
 
-			cout << C[0] << endl;
+			cout << outputData << endl;
 		}
 		catch (cl::Error err)
 		{
