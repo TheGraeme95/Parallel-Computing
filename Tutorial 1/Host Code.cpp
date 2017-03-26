@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
 		//2.2 Load & build the device code
 		cl::Program::Sources sources;
 
-		AddSources(sources, "Kernels.cl");
+		AddSources(sources, "myKernels.cl");
 
 		cl::Program program(context, sources);
 
@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
 			std::cout << "Build Log:\t " << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(context.getInfo<CL_CONTEXT_DEVICES>()[0]) << std::endl;
 			throw err;
 		}
-
+		
 		//Part 4 - memory allocation
 		//host - input
 		cl::Device device = context.getInfo<CL_CONTEXT_DEVICES>()[0];
@@ -99,7 +99,7 @@ int main(int argc, char **argv) {
 		//queue.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>
 		//(device);
 		
-		size_t workGroupSize = 256;
+		size_t workGroupSize = 512;		
 		size_t padding = input_Data.size() % workGroupSize;
 		
 
@@ -112,19 +112,16 @@ int main(int argc, char **argv) {
 		}
 
 
-
 			//number of elements
 			size_t numInputElements = input_Data.size();
 			size_t input_size = input_Data.size() * sizeof(mytype);//size in bytes
 			size_t numWorkGroups = numInputElements / workGroupSize;
 
 			//host - output
-			vector<mytype> outputData(numWorkGroups);
-			size_t output_size = outputData.size() * sizeof(mytype);			
-			//device - buffers
-			//cl::Buffer buffer_A(context, CL_MEM_READ_WRITE, vector_size); //input buffer
-			//cl::Buffer buffer_C(context, CL_MEM_READ_WRITE, vector_size); //ouput buffer
-
+			vector<mytype> outputData(input_Data.size());
+			size_t output_size = numWorkGroups;	
+				
+			//device - buffers			
 			cl::Buffer inBuffer(context, CL_MEM_READ_WRITE, input_size);
 			cl::Buffer outBuffer(context, CL_MEM_READ_WRITE, output_size);
 
@@ -134,28 +131,14 @@ int main(int argc, char **argv) {
 			queue.enqueueWriteBuffer(inBuffer, CL_TRUE, 0, input_size, &input_Data[0]);
 			queue.enqueueFillBuffer(outBuffer, 0, 0, output_size);//zero B buffer on device memory
 
-			cl::Kernel kernel_sum = cl::Kernel(program, "Sum");
+			cl::Kernel kernel_sum = cl::Kernel(program, "sumGPU");
 			kernel_sum.setArg(0, inBuffer);
-			kernel_sum.setArg(1, cl::Local(sizeof(mytype) * workGroupSize));//local memory size
+			kernel_sum.setArg(1, cl::Local(sizeof(mytype) * workGroupSize));//local memory size			
 			kernel_sum.setArg(2, outBuffer);
-			
-
 
 			queue.enqueueNDRangeKernel(kernel_sum, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(workGroupSize));
 
-
-
-			//5.2 Setup and execute the kernel (i.e. device code)
-		/*	cl::Kernel kernel_min = cl::Kernel(program, "Minimum");
-			kernel_min.setArg(0, inBuffer);		
-			kernel_min.setArg(1, cl::Local(sizeof(mytype) * local_size));//local memory size
-			kernel_min.setArg(2, numInputElements);
-			kernel_min.setArg(3, outBuffer);
-			queue.enqueueNDRangeKernel(kernel_min, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(local_size));
-		*/
-			//5.3 Copy the result from device to host
-			queue.enqueueReadBuffer(outBuffer, CL_TRUE, 0, output_size, outputData.data());
-
+			queue.enqueueReadBuffer(outBuffer, CL_TRUE, 0, output_size, &outputData[0]);
 
 
 			cout << outputData << endl;

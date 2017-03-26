@@ -182,7 +182,7 @@
     <ClCompile Include="..\..\..\Tutorial 1\Host Code.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <Intel_OpenCL_Build_Rules Include="Kernels.cl" />
+    <Intel_OpenCL_Build_Rules Include="myKernels.cl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

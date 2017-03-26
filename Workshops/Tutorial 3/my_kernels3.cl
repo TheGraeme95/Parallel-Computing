@@ -156,3 +156,34 @@ __kernel void scan_add_adjust(__global int* A, __global const int* B) {
 	int gid = get_group_id(0);
 	A[id] += B[gid];
 }
+
+  __kernel void sumGPU ( __global const int* input, __global int* output, __local int* scratch)
+ {
+  uint local_id = get_local_id(0);
+  uint group_size = get_local_size(0);
+
+  // Copy from global memory to local memory
+  scratch[local_id] = input[get_global_id(0)];
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+      // Divide WorkGroup into 2 parts and add elements 2 by 2
+      // between local_id and local_id + stride
+
+	  for (int i = 1; i < group_size; i *= 2) {
+		if (!(local_id % (i * 2)) && ((local_id + i) < group_size)){
+			printf("scratch[%d] += scratch[%d] (%d += %d)\n", local_id, local_id + i, scratch[local_id], scratch[local_id + i]);
+			scratch[local_id] += scratch[local_id + i];
+			}
+		barrier(CLK_LOCAL_MEM_FENCE);
+	}      
+	
+     
+
+  // Write result into partialSums[nWorkGroups]
+  //if (local_id == 0)
+    //output[get_group_id(0)] = scratch[0];
+	if (!lid) {
+		atomic_add(&B[0],scratch[lid]);
+	}
+	
+ }	
