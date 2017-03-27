@@ -1,3 +1,5 @@
+#pragma once
+
 #include <fstream>
 #include <vector>
 #include <iostream>
@@ -36,7 +38,7 @@ string GetDeviceName(int platform_id, int device_id) {
 }
 
 const char *getErrorString(cl_int error) {
-	switch (error) {
+	switch (error){
 		// run-time and JIT compiler errors
 	case 0: return "CL_SUCCESS";
 	case -1: return "CL_DEVICE_NOT_FOUND";
