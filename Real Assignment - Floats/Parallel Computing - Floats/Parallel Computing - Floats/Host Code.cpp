@@ -31,8 +31,9 @@ float Sum(cl::Context& context, cl::CommandQueue& queue, cl::Program& program, v
 	size_t workGroupSize = WorkGroupSize;	
 	size_t numInputElements = inputData.size();	
 	size_t input_size = inputData.size() * sizeof(mytype);//size in bytes	
-	vector<mytype> outputData(1);
-	size_t output_size = outputData.size() * sizeof(mytype);	
+	vector<mytype> outputData(inputData.size());
+	size_t output_size = outputData.size() * sizeof(mytype);
+	size_t N = inputData.size()/workGroupSize;
 
 	cl::Buffer inBuffer(context, CL_MEM_READ_WRITE, input_size);
 	cl::Buffer outBuffer(context, CL_MEM_READ_WRITE, output_size);
@@ -40,13 +41,25 @@ float Sum(cl::Context& context, cl::CommandQueue& queue, cl::Program& program, v
 	queue.enqueueWriteBuffer(inBuffer, CL_TRUE, 0, input_size, &inputData[0]);
 	queue.enqueueFillBuffer(outBuffer, 0, 0, output_size);	
 
-	cl::Kernel kernel_sum = cl::Kernel(program, "Sum");
+	cl::Kernel kernel_sum = cl::Kernel(program, "floatSum");
 	kernel_sum.setArg(0, inBuffer);
 	kernel_sum.setArg(1, cl::Local(sizeof(mytype) * workGroupSize));//local memory size	
-	kernel_sum.setArg(2, outBuffer);
-			
+	kernel_sum.setArg(2, outBuffer);			
 	
+	
+	//1st Reduction
 	queue.enqueueNDRangeKernel(kernel_sum, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(workGroupSize));	
+	
+	kernel_sum.setArg(0, outBuffer);
+
+	while(N > workGroupSize)
+	{
+		queue.enqueueNDRangeKernel(kernel_sum, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(workGroupSize));
+		N = N/workGroupSize;
+		cout << N << endl;
+	}
+
+	queue.enqueueNDRangeKernel(kernel_sum, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(workGroupSize));
 
 	queue.enqueueReadBuffer(outBuffer, CL_TRUE, 0, output_size, &outputData[0]);
 	
@@ -62,8 +75,9 @@ float MiniumumMaximum(cl::Context& context, cl::CommandQueue& queue , cl::Progra
 	size_t workGroupSize = WorkGroupSize;	
 	size_t numInputElements = inputData.size();	
 	size_t input_size = inputData.size() * sizeof(mytype);//size in bytes
-	vector<mytype> outputData(1);
+	vector<mytype> outputData(inputData.size());
 	size_t output_size = outputData.size() * sizeof(mytype);
+	size_t N = inputData.size() / workGroupSize;
 
 	cl::Buffer inBuffer(context, CL_MEM_READ_WRITE, input_size);
 	cl::Buffer outBuffer(context, CL_MEM_READ_WRITE, output_size);
@@ -77,16 +91,27 @@ float MiniumumMaximum(cl::Context& context, cl::CommandQueue& queue , cl::Progra
 	kernel_min.setArg(2, outBuffer);
 	kernel_min.setArg(3, choice);
 
+	queue.enqueueNDRangeKernel(kernel_min, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(workGroupSize));
+	kernel_min.setArg(0, outBuffer);
+
+	while (N > workGroupSize)
+	{
+		queue.enqueueNDRangeKernel(kernel_min, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(workGroupSize));
+		N = N / workGroupSize;		
+	}
 
 	queue.enqueueNDRangeKernel(kernel_min, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(workGroupSize));
+	
+
+	
 
 	queue.enqueueReadBuffer(outBuffer, CL_TRUE, 0, output_size, &outputData[0]);
-
-	 return (float)outputData[0];
+	
+	return (float)outputData[0];
 
 }
 
-float StandardDeviation(cl::Context& context, cl::CommandQueue& queue, cl::Program& program, vector<mytype> inputData, size_t WorkGroupSize, float mean)
+float StandardDeviation(cl::Context& context, cl::CommandQueue& queue, cl::Program& program, cl::Buffer inputBuffer, size_t WorkGroupSize, float mean)
 {
 
 	size_t workGroupSize = WorkGroupSize;
@@ -94,15 +119,14 @@ float StandardDeviation(cl::Context& context, cl::CommandQueue& queue, cl::Progr
 	size_t input_size = inputData.size() * sizeof(mytype);//size in bytes
 	vector<mytype> outputData(1);
 	size_t output_size = outputData.size() * sizeof(mytype);
-
-	cl::Buffer inBuffer(context, CL_MEM_READ_WRITE, input_size);
+		
 	cl::Buffer outBuffer(context, CL_MEM_READ_WRITE, output_size);
 
-	queue.enqueueWriteBuffer(inBuffer, CL_TRUE, 0, input_size, &inputData[0]);
+	
 	queue.enqueueFillBuffer(outBuffer, 0, 0, output_size);
 
 	cl::Kernel kernel_std = cl::Kernel(program, "SquaredDifferences");
-	kernel_std.setArg(0, inBuffer);
+	kernel_std.setArg(0, inputBuffer);
 	kernel_std.setArg(1, cl::Local(sizeof(mytype) * workGroupSize));//local memory size	
 	kernel_std.setArg(2, outBuffer);
 	kernel_std.setArg(3, mean);
@@ -171,7 +195,7 @@ int main(int argc, char **argv) {
 			}
 
 			//Parse word to double (higher precison)
-			inputData.push_back((strtof(word, NULL))*10);
+			inputData.push_back((strtof(word, NULL)));
 		}
 	}
 	
@@ -210,8 +234,11 @@ int main(int argc, char **argv) {
 			inputData.insert(inputData.end(), A_ext.begin(), A_ext.end());
 		}
 
-				
-		
+		float total = Sum(context, queue, program, inputData, workGroupSize);
+		printf("\nTotal: %f\n", total);
+
+		float Minimum = MiniumumMaximum(context, queue, program, inputData, workGroupSize, 1);
+		printf("\nMinimum: %f\n", Minimum);
 		
 
 

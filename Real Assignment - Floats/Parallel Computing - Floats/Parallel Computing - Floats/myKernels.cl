@@ -1,4 +1,4 @@
-  __kernel void floatSum ( __global const int* input, __local int* scratch, __global float* output)
+  __kernel void floatSum ( __global const float* input, __local int* scratch, __global float* output)
  {
   uint local_id = get_local_id(0);
   uint group_size = get_local_size(0);
@@ -22,6 +22,35 @@
   if (local_id == 0)
     output[get_group_id(0)] = scratch[0];	
   
+ }
+
+ __kernel void Minimum( __global const float* input, __local int* localMem, __global float* output)
+ {
+	uint local_id= get_local_id(0);
+	uint group_size = get_local_size(0);
+
+  // Copy from global memory to local memory
+	localMem[local_id] = input[get_global_id(0)];
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+      // Divide WorkGroup into 2 parts and add elements 2 by 2
+      // between local_id and local_id + stride
+
+	for (int i = 1; i < group_size; i *= 2) {
+		if (!(local_id % (i * 2)) && ((local_id + i) < group_size))		
+		{
+			if (localMem[local_id] > localMem[local_id + i])
+					localMem[local_id] = localMem[local_id + i];				
+
+		}
+		barrier(CLK_LOCAL_MEM_FENCE);
+	}           
+
+  // Write result into partialSums[nWorkGroups]
+  if (local_id == 0)
+    output[get_group_id(0)] = localMem[0];	
+ 
+ 
  }
 
 __kernel void Sum(__global const int* input, __local int* localMem, __global int* output) 
@@ -54,7 +83,7 @@ __kernel void Sum(__global const int* input, __local int* localMem, __global int
 	}
 }
 
-__kernel void MinMax(__global const int* input, __local int* localMem, __global int* output, int choice)
+__kernel void MinMax(__global const float* input, __local int* localMem, __global float* output, int choice)
 {
 	int global_ID = get_global_id(0);
 	int local_ID = get_local_id(0);
@@ -71,12 +100,12 @@ __kernel void MinMax(__global const int* input, __local int* localMem, __global 
 			if (choice == 1)
 				{
 					if (localMem[local_ID] > localMem[local_ID + i])
-						localMem[local_ID] = localMem[local_ID + i];			
+							localMem[local_ID] = localMem[local_ID + i];			
 				}
 			else
 				{
 					if (localMem[local_ID] < localMem[local_ID + i])
-						localMem[local_ID] = localMem[local_ID + i];
+							localMem[local_ID] = localMem[local_ID + i];
 				}
 		}
 
@@ -84,16 +113,9 @@ __kernel void MinMax(__global const int* input, __local int* localMem, __global 
 
 	}
 
-	if (choice == 1)
-				{
-					if (!local_ID)
-						atomic_min(&output[0], localMem[local_ID]);			
-				}
-			else
-				{
-					if (!local_ID)
-						atomic_max(&output[0], localMem[local_ID]);	
-				}
+	if (!local_ID)
+		output[get_group_id(0)] = localMem[0];	
+
 
 }
 

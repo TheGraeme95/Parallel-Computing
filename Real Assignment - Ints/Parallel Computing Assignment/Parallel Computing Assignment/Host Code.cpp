@@ -215,7 +215,6 @@ int main(int argc, char **argv) {
 
 		high_resolution_clock::time_point t1 = high_resolution_clock::now();
 		
-		MiniumumMaximum(context, queue, program, inputData, workGroupSize, 0);
 		float total = ((Sum(context, queue, program, inputData, workGroupSize))/10) ;
 		float mean = total / intialInputSize;
 
@@ -236,14 +235,10 @@ int main(int argc, char **argv) {
 
 		printf("\n###############################################\n");
 		*/
-		float squareddifferences = StandardDeviation(context, queue, program, inputData, workGroupSize, (mean*10));
-		printf("\nStandard Deviation: %f\n", squareddifferences);
-		float sqaureddifferences1 = squareddifferences/mean;
-		printf("\nStandard Deviation: %f\n", sqaureddifferences1);
-		float sqaureddifferences2 = sqaureddifferences1 / 10;
-		printf("\nStandard Deviation: %f\n", sqaureddifferences2);
-		float sqaureddifferences3 = sqrt(sqaureddifferences2);
-		printf("\nStandard Deviation: %f\n", sqaureddifferences3);
+		float squareddifferences = sqrt(StandardDeviation(context, queue, program, inputData, workGroupSize, (mean*10))/(inputData.size()*10));
+		printf("Standard Deviation: %f\n", squareddifferences);
+
+
 
 		
 		high_resolution_clock::time_point t2 = high_resolution_clock::now();
