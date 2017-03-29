@@ -26,23 +26,19 @@ void print_help() {
 
 //////////////////////////// SUM ///////////////////////////////////////
 
-void Sum(cl::Context& context, cl::CommandQueue& queue, cl::Program& program, vector<mytype> inputData, size_t WorkGroupSize)
+float Sum(cl::Context& context, cl::CommandQueue& queue, cl::Program& program, vector<mytype> inputData, size_t WorkGroupSize)
 {
-	size_t workGroupSize = WorkGroupSize;
-	cout << WorkGroupSize << endl;	
-	size_t numInputElements = inputData.size();
-	cout << numInputElements << endl;
-	size_t input_size = inputData.size() * sizeof(mytype);//size in bytes
-	cout << input_size << endl;	
+	size_t workGroupSize = WorkGroupSize;	
+	size_t numInputElements = inputData.size();	
+	size_t input_size = inputData.size() * sizeof(mytype);//size in bytes	
 	vector<mytype> outputData(1);
-	size_t output_size = outputData.size() * sizeof(mytype);
-	cout << output_size << endl;
+	size_t output_size = outputData.size() * sizeof(mytype);	
 
 	cl::Buffer inBuffer(context, CL_MEM_READ_WRITE, input_size);
 	cl::Buffer outBuffer(context, CL_MEM_READ_WRITE, output_size);
 
 	queue.enqueueWriteBuffer(inBuffer, CL_TRUE, 0, input_size, &inputData[0]);
-	queue.enqueueFillBuffer(outBuffer, 0, 0, output_size);
+	queue.enqueueFillBuffer(outBuffer, 0, 0, output_size);	
 
 	cl::Kernel kernel_sum = cl::Kernel(program, "Sum");
 	kernel_sum.setArg(0, inBuffer);
@@ -50,17 +46,18 @@ void Sum(cl::Context& context, cl::CommandQueue& queue, cl::Program& program, ve
 	kernel_sum.setArg(2, outBuffer);
 			
 	
-	queue.enqueueNDRangeKernel(kernel_sum, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(workGroupSize));
+	queue.enqueueNDRangeKernel(kernel_sum, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(workGroupSize));	
 
 	queue.enqueueReadBuffer(outBuffer, CL_TRUE, 0, output_size, &outputData[0]);
-
-	cout << outputData[0] << endl;
+	
+	return (float)outputData[0];
+	
 
 }
 
-//////////////////////////// MINIMUM ///////////////////////////////////////
+//////////////////////////// MINIMUM and MAXIMUM ///////////////////////////////////////
 
-void MiniumumMaximum(cl::Context& context, cl::CommandQueue& queue, cl::Program& program, vector<mytype> inputData, size_t WorkGroupSize, int choice)
+float MiniumumMaximum(cl::Context& context, cl::CommandQueue& queue , cl::Program& program, vector<mytype> inputData, size_t WorkGroupSize, int choice)
 {
 	size_t workGroupSize = WorkGroupSize;	
 	size_t numInputElements = inputData.size();	
@@ -74,7 +71,7 @@ void MiniumumMaximum(cl::Context& context, cl::CommandQueue& queue, cl::Program&
 	queue.enqueueWriteBuffer(inBuffer, CL_TRUE, 0, input_size, &inputData[0]);
 	queue.enqueueFillBuffer(outBuffer, 0, 0, output_size);
 
-	cl::Kernel kernel_min = cl::Kernel(program, "Minimum");
+	cl::Kernel kernel_min = cl::Kernel(program, "MinMax");
 	kernel_min.setArg(0, inBuffer);
 	kernel_min.setArg(1, cl::Local(sizeof(mytype) * workGroupSize));//local memory size	
 	kernel_min.setArg(2, outBuffer);
@@ -85,9 +82,39 @@ void MiniumumMaximum(cl::Context& context, cl::CommandQueue& queue, cl::Program&
 
 	queue.enqueueReadBuffer(outBuffer, CL_TRUE, 0, output_size, &outputData[0]);
 
-	cout << outputData[0] << endl;
+	 return (float)outputData[0];
 
 }
+
+float StandardDeviation(cl::Context& context, cl::CommandQueue& queue, cl::Program& program, vector<mytype> inputData, size_t WorkGroupSize, float mean)
+{
+
+	size_t workGroupSize = WorkGroupSize;
+	size_t numInputElements = inputData.size();
+	size_t input_size = inputData.size() * sizeof(mytype);//size in bytes
+	vector<mytype> outputData(1);
+	size_t output_size = outputData.size() * sizeof(mytype);
+
+	cl::Buffer inBuffer(context, CL_MEM_READ_WRITE, input_size);
+	cl::Buffer outBuffer(context, CL_MEM_READ_WRITE, output_size);
+
+	queue.enqueueWriteBuffer(inBuffer, CL_TRUE, 0, input_size, &inputData[0]);
+	queue.enqueueFillBuffer(outBuffer, 0, 0, output_size);
+
+	cl::Kernel kernel_std = cl::Kernel(program, "SquaredDifferences");
+	kernel_std.setArg(0, inBuffer);
+	kernel_std.setArg(1, cl::Local(sizeof(mytype) * workGroupSize));//local memory size	
+	kernel_std.setArg(2, outBuffer);
+	kernel_std.setArg(3, mean);
+
+
+	queue.enqueueNDRangeKernel(kernel_std, cl::NullRange, cl::NDRange(numInputElements), cl::NDRange(workGroupSize));
+
+	queue.enqueueReadBuffer(outBuffer, CL_TRUE, 0, output_size, &outputData[0]);	
+	return (float)outputData[0];
+
+}
+
 
 /////////////////////////////// MAIN /////////////////////////////////////
 
@@ -104,8 +131,6 @@ int main(int argc, char **argv) {
 	}
 
 //////////////////// Reading the data from the file //////////////////
-	
-	
 
 	ifstream inFileStream("temp_lincolnshire_short.txt");	
 //////////////////// OPEN FILE ////////////////////////
@@ -146,19 +171,17 @@ int main(int argc, char **argv) {
 			}
 
 			//Parse word to double (higher precison)
-			inputData.push_back(stoi(word, NULL));
+			inputData.push_back((strtof(word, NULL))*10);
 		}
 	}
-
-	cout << inputData[0] << inputData[1] << endl;
+	
 ///////////////////////////////////////////////////////////////////
 
-	//detect any potential exceptions
 	try {
 
 		cl::Context context = GetContext(platform_id, device_id);
 		cout << "Runinng on " << GetPlatformName(platform_id) << ", " << GetDeviceName(platform_id, device_id) << endl;
-		cl::CommandQueue queue(context);	
+		cl::CommandQueue queue(context);
 		cl::Program::Sources sources;
 		AddSources(sources, "myKernels.cl");
 		cl::Program program(context, sources);
@@ -177,7 +200,7 @@ int main(int argc, char **argv) {
 		//Part 4 - memory allocation
 		//host - input
 		cl::Device device = context.getInfo<CL_CONTEXT_DEVICES>()[0];	
-		
+		size_t intialInputSize = inputData.size();
 		size_t workGroupSize = 256;
 		size_t padding = inputData.size() % workGroupSize;		
 
@@ -188,9 +211,41 @@ int main(int argc, char **argv) {
 		}
 
 
+		
+
 		high_resolution_clock::time_point t1 = high_resolution_clock::now();
-		MiniumumMaximum(context, queue, program, inputData, workGroupSize, 1);
+		
 		MiniumumMaximum(context, queue, program, inputData, workGroupSize, 0);
+		float total = ((Sum(context, queue, program, inputData, workGroupSize))/10) ;
+		float mean = total / intialInputSize;
+
+		printf("\n###############################################\n");
+
+		printf("\nTotal: %f\n", total);
+		printf("Mean: %f\n", mean);
+		/*
+		printf("\n###############################################\n");
+
+		float Min = (MiniumumMaximum(context, queue, program, inputData, workGroupSize, 1)/10);
+		printf("\nMinimum: %f\n", Min);
+
+		printf("\n###############################################\n");
+
+		float Max = (MiniumumMaximum(context, queue, program, inputData, workGroupSize, 0) / 10);
+		printf("\nMaximum: %f\n", Max);
+
+		printf("\n###############################################\n");
+		*/
+		float squareddifferences = StandardDeviation(context, queue, program, inputData, workGroupSize, (mean*10));
+		printf("\nStandard Deviation: %f\n", squareddifferences);
+		float sqaureddifferences1 = squareddifferences/mean;
+		printf("\nStandard Deviation: %f\n", sqaureddifferences1);
+		float sqaureddifferences2 = sqaureddifferences1 / 10;
+		printf("\nStandard Deviation: %f\n", sqaureddifferences2);
+		float sqaureddifferences3 = sqrt(sqaureddifferences2);
+		printf("\nStandard Deviation: %f\n", sqaureddifferences3);
+
+		
 		high_resolution_clock::time_point t2 = high_resolution_clock::now();
 		auto duration = duration_cast<microseconds>(t2 - t1).count();
 		cout << duration;

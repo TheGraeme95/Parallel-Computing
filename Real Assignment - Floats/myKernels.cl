@@ -24,14 +24,14 @@
   
  }
 
-__kernel void Sum(__global const int* input, __local int* scratch, __global int* output) 
+__kernel void Sum(__global const int* input, __local int* localMem, __global int* output) 
 {
 	int global_ID = get_global_id(0);
 	int local_ID = get_local_id(0);
 	int group_Size = get_local_size(0);
 
 	//cache all N values from global memory to local memory
-	scratch[local_ID] = input[global_ID];
+	localMem[local_ID] = input[global_ID];
 
 	barrier(CLK_LOCAL_MEM_FENCE);//wait for all local threads to finish copying from global to local memory
 
@@ -40,7 +40,7 @@ __kernel void Sum(__global const int* input, __local int* scratch, __global int*
 		if (!(local_ID % (i * 2)) && ((local_ID + i) < group_Size))
 		{
 			//printf("scratch[%d] += scratch[%d] (%d += %d)\n", lid, lid + i, scratch[lid], scratch[lid + i]);
-			scratch[local_ID] += scratch[local_ID + i];
+			localMem[local_ID] += localMem[local_ID + i];
 		}
 		barrier(CLK_LOCAL_MEM_FENCE);
 	}
@@ -50,11 +50,11 @@ __kernel void Sum(__global const int* input, __local int* scratch, __global int*
 	//copy the cache to output array
 	if (!local_ID) 
 	{
-		atomic_add(&output[0],scratch[local_ID]);
+		atomic_add(&output[0],localMem[local_ID]);
 	}
 }
 
-__kernel void Minimum(__global const int* input, __local int* localMem, __global int* output, int choice)
+__kernel void MinMax(__global const int* input, __local int* localMem, __global int* output, int choice)
 {
 	int global_ID = get_global_id(0);
 	int local_ID = get_local_id(0);
@@ -94,5 +94,24 @@ __kernel void Minimum(__global const int* input, __local int* localMem, __global
 					if (!local_ID)
 						atomic_max(&output[0], localMem[local_ID]);	
 				}
+
+}
+
+
+__kernel void SquaredDifferences(__global const int* input, __local int* localMem, __global int* output, float mean)
+{
+	
+	int global_ID = get_global_id(0);
+	int local_ID = get_local_id(0);
+	int group_Size = get_local_size(0);	
+
+	localMem[local_ID] = input[global_ID];
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	localMem[local_ID] = ((localMem[local_ID] - mean)*(localMem[local_ID] - mean));
+	
+
+	atomic_add(&output[0], localMem[local_ID]);
+
 
 }
